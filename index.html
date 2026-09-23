@@ -41,6 +41,23 @@
   }
   .page-canvas { display: block; }
   .link-overlay { position: absolute; display: block; }
+  .textLayer {
+    position: absolute;
+    left: 0;
+    top: 0;
+    overflow: hidden;
+    line-height: 1.0;
+  }
+  .textLayer > span {
+    color: transparent;
+    position: absolute;
+    white-space: pre;
+    cursor: text;
+    transform-origin: 0% 0%;
+  }
+  .textLayer ::selection {
+    background: rgba(59, 130, 246, 0.35);
+  }
   #loading { color: #cfd2d8; text-align: center; padding: 3rem 1rem; font-family: Georgia, serif; }
   #error { display: none; color: #cfd2d8; text-align: center; padding: 3rem 1rem; font-family: Georgia, serif; }
   #error a { color: #6ea8fe; }
@@ -98,6 +115,21 @@
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = "high";
       await page.render({ canvasContext: ctx, viewport: renderViewport }).promise;
+      try {
+        const textContent = await page.getTextContent();
+        const textLayerDiv = document.createElement("div");
+        textLayerDiv.className = "textLayer";
+        textLayerDiv.style.width = Math.floor(cssViewport.width) + "px";
+        textLayerDiv.style.height = Math.floor(cssViewport.height) + "px";
+        wrapper.appendChild(textLayerDiv);
+        const textTask = pdfjsLib.renderTextLayer({
+          textContent: textContent,
+          container: textLayerDiv,
+          viewport: cssViewport,
+          textDivs: []
+        });
+        if (textTask && textTask.promise) { await textTask.promise; }
+      } catch (e) { console.error("text layer error on page " + pageNum, e); }
       try {
         const annotations = await page.getAnnotations();
         for (const ann of annotations) {
