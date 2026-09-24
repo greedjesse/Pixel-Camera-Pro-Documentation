@@ -107,10 +107,29 @@
     const myToken = ++renderToken;
     const container = document.getElementById("pages");
     const loading = document.getElementById("loading");
-    container.querySelectorAll(".page-wrapper").forEach((el) => el.remove());
+
+    // Remember where the user currently is (which page, and how far into it)
+    // so we can put them back in the same spot after re-rendering at the new size.
+    const oldWrappers = Array.from(container.querySelectorAll(".page-wrapper"));
+    const scroller = document.scrollingElement || document.documentElement;
+    const oldScrollY = scroller.scrollTop;
+    let anchorIndex = -1;
+    let anchorFraction = 0;
+    for (let i = 0; i < oldWrappers.length; i++) {
+      const top = oldWrappers[i].offsetTop;
+      const height = oldWrappers[i].offsetHeight;
+      if (oldScrollY < top + height || i === oldWrappers.length - 1) {
+        anchorIndex = i;
+        anchorFraction = height > 0 ? (oldScrollY - top) / height : 0;
+        break;
+      }
+    }
+
     const maxCssWidth = Math.min(1000, window.innerWidth - 24);
     const pixelDensity = Math.min(window.devicePixelRatio || 1, 3);
     const pageWrappers = [];
+    const fragment = document.createDocumentFragment();
+
     for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
       if (myToken !== renderToken) return;
       const page = await pdfDoc.getPage(pageNum);
@@ -129,7 +148,7 @@
       wrapper.style.width = Math.floor(cssViewport.width) + "px";
       wrapper.style.height = Math.floor(cssViewport.height) + "px";
       wrapper.appendChild(canvas);
-      container.appendChild(wrapper);
+      fragment.appendChild(wrapper);
       pageWrappers.push(wrapper);
       const ctx = canvas.getContext("2d");
       ctx.imageSmoothingEnabled = true;
@@ -187,7 +206,20 @@
           wrapper.appendChild(overlay);
         }
       } catch (e) { console.error("annotation error on page " + pageNum, e); }
-      if (pageNum === 1 && loading) { loading.remove(); }
+    }
+
+    if (myToken !== renderToken) return;
+
+    // Swap old pages out for the freshly rendered ones in a single step, then
+    // restore the scroll position so the view doesn't jump or flicker.
+    oldWrappers.forEach((el) => el.remove());
+    container.appendChild(fragment);
+    if (loading) loading.remove();
+
+    if (anchorIndex >= 0 && pageWrappers[anchorIndex]) {
+      const target = pageWrappers[anchorIndex];
+      const newY = target.offsetTop + anchorFraction * target.offsetHeight;
+      scroller.scrollTop = Math.max(0, newY);
     }
   }
 
